@@ -1,15 +1,24 @@
+# Camille Ross
+# May 2020
+# Purpose: plot presence and absense right whale sightings data
+
+# Load libraries
 library(readr) 
 library(ggplot2)
 library(plyr)
 library(dplyr)
 library(viridis)
 library(maps)
+library(marmap)
 
+# Set working directory
 DIR <- '~/Desktop/Thesis/Bigelow/right_whale'
 setwd(dir = DIR)
+
 #Create filepath to presence/absense data
 fp_pa <- file.path(DIR, 'pa_data')
 
+# Initialize color palette
 cbp <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
@@ -23,25 +32,26 @@ full_data <- full_data %>%
              #Add binary presence/absence column (p = 1, a = 0)
              mutate(pa = if_else(is.na(SPECCODE), 0, 1))
 
+# Isolate presences
 presences <- data.frame(rowsum(full_data$pa, group = full_data$MONTH)) %>%
   mutate(month = seq(1:12),
          pa = 'Present')
 
+# Rename
 names(presences) <- c('count', "month", "pa")
 
-full_data <- full_data %>%
-  mutate(pa = if_else(is.na(SPECCODE), 1, 0))
-
+# Isolate absences
 absences <- data.frame(rowsum(full_data$pa, group = full_data$MONTH)) %>%
   mutate(month = seq(1:12),
          pa = 'Absent')
 
+# Rename
 names(absences) <- c('count', "month", "pa")
 
+# Combine monthly presences and absences
 df <- rbind(absences, presences)
+# Rename
 names(df) <- c('count', 'month', 'RightWhale')
-
-df_a <- df %>% dplyr::filter(RightWhale == "Absent")
 
 #Presence/absence bar chart
 ggplot(presences, aes(fill=pa, y=count, x=month)) + 
@@ -54,8 +64,7 @@ ggplot(presences, aes(fill=pa, y=count, x=month)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
 
-#Line chart
-
+# Line chart
 ggplot(absences, aes(x = month, y = count, color = pa)) +
   geom_path() +
   geom_path(data = presences, aes(x = month, y = count*20, color = pa)) +
@@ -69,6 +78,7 @@ ggplot(absences, aes(x = month, y = count, color = pa)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         legend.justification=c(1.15,0), legend.position=c(1,0.72))
 
+# Line chart with presences only
 ggplot(df[df$RightWhale == "Present",], aes(x = month, y = count)) +
   geom_path() +
   ylab("Count") +
@@ -79,12 +89,15 @@ ggplot(df[df$RightWhale == "Present",], aes(x = month, y = count)) +
   theme_bw() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
+# Calculate effort
 effort <- full_data %>% 
   mutate(code = paste0(latgrd, longrd)) %>%
   add_count(code)
 
+# Load world map data
 worldmap <- map_data("world")
 
+# Plot effort
 ggplot() + 
   #Add probability data
   geom_tile(data = effort, aes(longrd, latgrd, fill = n)) +
@@ -114,17 +127,21 @@ effort <- full_data %>%
                                 ifelse(MONTH == 6 | MONTH == 7 | MONTH == 8, "Summer", "Fall")))) %>%
   add_count(code)
 
+# Add season as a factor to effort data
 effort <- effort %>%
   mutate(season_f = factor(Season, levels=c('Winter','Spring','Summer','Fall')))
 
+# Add season to sightings data
 sightings <- full_data %>%
   mutate(Season = ifelse(MONTH == 12 | MONTH == 1 | MONTH == 2, "Winter", 
                          ifelse(MONTH == 3 | MONTH == 4 | MONTH == 5, "Spring", 
                                 ifelse(MONTH == 6 | MONTH == 7 | MONTH == 8, "Summer", "Fall"))))
 
+# Add season as a factor to sightings data
 sightings <- sightings %>%
   mutate(season_f = factor(Season, levels=c('Winter','Spring','Summer','Fall')))
 
+# Plot normalized effort by season with sightings
 ggplot() + 
   #Add probability data
   geom_tile(data = effort, aes(longrd, latgrd, fill = n)) +
@@ -143,11 +160,11 @@ ggplot() +
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         axis.title.x = element_blank(), axis.title.y = element_blank()) +
-  #ggsave(filename = file.path(DIR, paste('effort_normalized_with_sightings.jpeg', sep = '')))
-  #
+  ggsave(filename = file.path(DIR, paste('effort_normalized_with_sightings.jpeg', sep = ''))) +
   facet_grid(row = vars(season_f)) + 
   facet_wrap(~ season_f, scales = 'free', nrow = 2)
 
+# Plot normalized effort without sightings
 ggplot() + 
   #Add probability data
   geom_tile(data = as.data.frame(bat, xy = T, na.rm = T), aes(x, y, fill = layer)) +
@@ -161,9 +178,10 @@ ggplot() +
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         axis.title.x = element_blank(), axis.title.y = element_blank())
-  #ggsave(filename = file.path(DIR, paste('effort_normalized_with_sightings.jpeg', sep = '')))
-  #
-library(marmap) ; library(ggplot2)
+  ggsave(filename = file.path(DIR, paste('effort_normalized_without_sightings.jpeg', sep = '')))
+
+
+# ---- Plot bathymetry map ----
 dat <- getNOAA.bathy(round(min(effort$longrd))-0.6,round(max(effort$longrd))+0.6,round(min(effort$latgrd))-0.6,round(max(effort$latgrd))+0.8,res=1, keep=TRUE)
 plot(dat, image=TRUE, deep=-6000, shallow=0, step=10)
 # Plot bathy object using custom ggplot2 functions
@@ -175,6 +193,7 @@ autoplot(dat, geom=c("r", "c")) + scale_fill_etopo() +
         axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         axis.title.x = element_blank(), axis.title.y = element_blank())
 
+# Create bathymetry map with ggplot2 (used in paper)
 ggplot(dat, aes(x=x, y=y)) + coord_quickmap() +
   # background
   geom_raster(aes(fill=z)) +
@@ -194,7 +213,7 @@ ggplot(dat, aes(x=x, y=y)) + coord_quickmap() +
         axis.title.x = element_blank(), axis.title.y = element_blank())
 
   
-# Monthly effort maps
+# ---- Create monthly effort maps ----
 month_labs <- c("January", "February", "March", "April", "May", "June", 
                 "July", "August", "September", "October", "November", "December")
 

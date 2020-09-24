@@ -1,9 +1,13 @@
+# Camille Ross 
+# April 2020
+# Purpose: combine right whale sightings data with environmental covariates
+
 #Load libraries
 library(dplyr) #Useful functions for use with data frames (i.e. mutate, filter, etc.) & piping (%>%)
 library(readr) #allows reading and writing of CSV files
 library(raster) #Read in & create .grd raster files
 
-#floor values if using second approach for pixels
+# Function to convert latitude and longitude into pixels
 latlon2cell <- function(lat,lon,cellsize_y, cellsize_x) {
   # %convert (lat lon) coordinates to (row column) coordinates
   # %lat=column vector containing latitude
@@ -15,13 +19,14 @@ latlon2cell <- function(lat,lon,cellsize_y, cellsize_x) {
   # % yurcorner=46;
   # % xllcorner=-72;
   
-  ROW=floor(((38.49874-lat)/cellsize_y))+1
-  COL=floor(((lon-(-72.46014))/cellsize_x))+1
+  ROW <- floor(((38.49874-lat)/cellsize_y))+1
+  COL <- floor(((lon-(-72.46014))/cellsize_x))+1
   
   return(c(COL,ROW))
 }
 
-DIR = '~/Desktop/Thesis/Bigelow/right_whale'
+# Set working directory
+DIR <- '~/Desktop/Thesis/Bigelow/right_whale'
 setwd(dir = DIR)
 
 #Create filepath to presence/absense data
@@ -45,12 +50,17 @@ fp_R85_sfce_temp_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R85_sfce/T_pres')
 fp_R45_sfce_sal_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R45_sfce/S_pres')
 fp_R85_sfce_sal_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R85_sfce/S_pres')
 
+# Load presence absence data
 pa_data <- readr::read_csv(file.path(fp_pa, 'RW_GOM2050_FORECAST_PAdata_Mar062019.csv')) %>%
   dplyr::select(YEAR, MONTH, DAY, latgrd, longrd, SPECCODE)
 
+# Add pixel field to presence absence data
 pa_data[c('lonpixel', 'latpixel')] <- latlon2cell(pa_data$latgrd, pa_data$longrd, 0.05785365, 0.08867679)
 
+# Loop through months
 for (month in sort(unique(pa_data$MONTH))) {
+  
+  # Isolate presence absence data for current month
   pa <- pa_data %>% filter(MONTH == month)
     
   print(month) 
@@ -113,23 +123,28 @@ for (month in sort(unique(pa_data$MONTH))) {
                          xy = TRUE)
   chlor[c('lonpixel', 'latpixel')] <- latlon2cell(chlor$y, chlor$x, 0.05785365, 0.08867679)
       
+  # Modify names
   names(sst) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
   names(sst_btm) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
   names(sal) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
   names(sal_btm) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
       
+  # Compile covariates
   covars <- data.frame('lonpixel' = sst$lonpixel, 'latpixel' = sst$latpixel,
                        'sst' = sst$layer, 'sst_btm' = sst_btm$layer, 
                        'sal' = sal$layer, 'sal_btm' = sal_btm$layer, 'bat' = bat$layer, 'cal' = cal$layer,
                        'chlor' = chlor$z)
-      
+  
+  # Join presence absence data and covariates 
   temp_full_data <- left_join(pa, covars, by = c('lonpixel', 'latpixel'))
-      
+  
+  # Bind to data from previous months, if applicable  
   if (month == 1) {
     full_data <- temp_full_data
-  }else{
+  } else{
     full_data <- rbind(full_data, temp_full_data)
   }
 }
 
+# Write to CSV
 write_csv(full_data, file.path(fp_pa,'RIWH_MAR_2020_PRES_CLIMATOLOGY.csv'))
