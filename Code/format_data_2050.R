@@ -28,6 +28,8 @@ setwd(dir = DIR)
 fp_pa <- file.path(DIR, 'pa_data')
 #Calanus filepath
 fp_cal <- file.path(DIR, 'trn_lyrs/JiCalanus')
+#Chlorophyll filepath
+fp_chlor <- file.path(DIR, 'trn_lyrs/chlor_climatology')
 #Bathymetry filepath
 fp_bat <- file.path(DIR, 'trn_lyrs/bathy/gom')
 #DFO layers filepath
@@ -43,7 +45,7 @@ fp_R85_sfce_temp_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R85_sfce/T_pres')
 fp_R45_sfce_sal_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R45_sfce/S_pres')
 fp_R85_sfce_sal_pres <- file.path(DIR, 'trn_lyrs/DFO_2050/R85_sfce/S_pres')
 
-pa_data <- readr::read_csv(file.path(fp_pa, 'RW_GOM2050_FORECAST_PAdata_Nov182019.csv')) %>%
+pa_data <- readr::read_csv(file.path(fp_pa, 'RW_GOM2050_FORECAST_PAdata_Mar062019.csv')) %>%
   dplyr::select(YEAR, MONTH, DAY, latgrd, longrd, SPECCODE)
 
 pa_data[c('lonpixel', 'latpixel')] <- latlon2cell(pa_data$latgrd, pa_data$longrd, 0.05785365, 0.08867679)
@@ -51,7 +53,7 @@ pa_data[c('lonpixel', 'latpixel')] <- latlon2cell(pa_data$latgrd, pa_data$longrd
 for (month in sort(unique(pa_data$MONTH))) {
   pa <- pa_data %>% filter(MONTH == month)
     
-  print(paste(month))
+  print(month) 
     
   #load in initial environmental data layers for first sightings data point (1/2/2006)
   #SST from DFO climatology
@@ -104,6 +106,12 @@ for (month in sort(unique(pa_data$MONTH))) {
   cal <- as.data.frame(cal_raster, xy = TRUE) 
       
   cal[c('lonpixel', 'latpixel')] <- latlon2cell(cal$y, cal$x, 0.05785365, 0.08867679)
+  
+  #Chlorophyll
+  chlor <- as.data.frame(raster(file.path(fp_chlor, paste('chlor_a_', month, '.grd', sep = ''))) %>%
+                           raster::resample(sst_raster),
+                         xy = TRUE)
+  chlor[c('lonpixel', 'latpixel')] <- latlon2cell(chlor$y, chlor$x, 0.05785365, 0.08867679)
       
   names(sst) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
   names(sst_btm) <- c('x', 'y', 'layer', 'lonpixel', 'latpixel')
@@ -112,7 +120,8 @@ for (month in sort(unique(pa_data$MONTH))) {
       
   covars <- data.frame('lonpixel' = sst$lonpixel, 'latpixel' = sst$latpixel,
                        'sst' = sst$layer, 'sst_btm' = sst_btm$layer, 
-                       'sal' = sal$layer, 'sal_btm' = sal_btm$layer, 'bat' = bat$layer, 'cal' = cal$layer)
+                       'sal' = sal$layer, 'sal_btm' = sal_btm$layer, 'bat' = bat$layer, 'cal' = cal$layer,
+                       'chlor' = chlor$z)
       
   temp_full_data <- left_join(pa, covars, by = c('lonpixel', 'latpixel'))
       
@@ -123,4 +132,4 @@ for (month in sort(unique(pa_data$MONTH))) {
   }
 }
 
-write_csv(full_data, file.path(fp_pa,'RIWH_NOV_2019_PRES_CLIMATOLOGY.csv'))
+write_csv(full_data, file.path(fp_pa,'RIWH_MAR_2020_PRES_CLIMATOLOGY.csv'))
